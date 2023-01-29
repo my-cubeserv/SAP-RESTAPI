@@ -1,0 +1,271 @@
+************************************************************************
+** SAP ABAP code RESTAPI_DEMO
+**  created M.Y. CubeServ AG
+************************************************************************
+DATA:
+  lv_json_data        TYPE string,
+  lv_jsondata_sub     TYPE string,
+  lv_results_total    TYPE i,
+  lv_results_temp     TYPE i,
+  lv_results_value    TYPE i,
+  string_array_value  TYPE string,
+  string_array2_value TYPE string,
+  string_array3_value TYPE string,
+  json_data           TYPE string,
+  lr_json             TYPE REF TO /ui2/cl_json,
+  lv_url              TYPE string,
+  lv_http_client      TYPE REF TO if_http_client,
+  lr_rest_client      TYPE REF TO cl_rest_http_client,
+  lv_http_status      Type i,
+  lr_data             TYPE REF TO data,
+  temp_string         TYPE string,
+  lr_jsondata         TYPE REF TO data.
+
+
+DATA: lt_adso TYPE TABLE OF /BIC/ARESTAPI2,
+      ls_adso LIKE LINE OF lt_adso.
+
+lv_results_temp = 1.
+lv_results_value = 0.
+
+*********  REST API URL **********************************************
+*********************************************************************
+lv_url = 'http://ec.europa.eu/eurostat/wdds/rest/data/v2.1/json/de/demo_mlexpec?sex=F&age=Y20&geo=EU27_2020&time=2020'.
+* lv_url = 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_mlexpec?format=JSON&lang=EN&time=2020'.
+
+
+**********************************************************************
+*Create the HTTP client instance
+**********************************************************************
+CALL METHOD cl_http_client=>create_by_url(
+  EXPORTING
+    url                = lv_url
+  IMPORTING
+    client             = lv_http_client
+  EXCEPTIONS
+    argument_not_found = 1
+    plugin_not_active  = 2
+    internal_error     = 3
+    OTHERS             = 4 ).
+IF sy-subrc NE 0.
+  "error handling
+  RETURN.
+ENDIF.
+
+IF lv_http_client IS bound.
+***********************************************************************
+**Create REST Client object
+***********************************************************************
+** Create client
+  CREATE OBJECT lr_rest_client
+    EXPORTING
+      io_http_client = lv_http_client.
+
+* HTTP-Method
+  CALL METHOD lv_http_client->request->set_method(
+    if_http_request=>co_request_method_get ).
+
+
+**********************************************************************
+*Send Get-Request to fetch data
+**********************************************************************
+
+* HTTP GET senden, evtl. Timeout angeben
+*      lv_http_client->send( timeout = if_http_client=>co_timeout_default ).
+
+  TRY.
+      lr_rest_client->if_rest_client~get( ).
+
+      DATA(lo_response) = lr_rest_client->if_rest_client~get_response_entity( ).
+      lv_http_status = lo_response->get_header_field( '~status_code' ).
+      IF lv_http_status NE 200.
+
+        "HTTP Request Failed
+        DATA(lv_reason) = lo_response->get_header_field( '~status_reason' ).
+
+        RETURN.
+      ENDIF.
+
+      lv_json_data = lo_response->get_string_data( ).
+
+    CATCH cx_root INTO DATA(e_txt).
+      WRITE: / e_txt->get_text( ).
+
+  ENDTRY.
+
+* display in pop-up window
+ cl_demo_output=>display( lv_json_data ).
+
+
+**********************************************************************
+*Parse json fileds
+**********************************************************************
+  FIELD-SYMBOLS:
+    <ls_jsondata> TYPE any,
+    <table>       TYPE STANDARD TABLE,
+    <lv_value>    TYPE ANY,
+    <field>       TYPE any.
+
+
+  IF lv_json_data IS NOT INITIAL.
+*
+**********************************************************************
+* verify size of values
+**********************************************************************
+
+    lv_jsondata_sub = substring_from( val = lv_json_data sub = '"size"').
+    lv_jsondata_sub  = '{' && lv_jsondata_sub.
+
+    CREATE OBJECT lr_json.
+    TRY.
+        lr_json->deserialize(
+          EXPORTING json = lv_jsondata_sub
+          assoc_arrays = abap_true
+          CHANGING  data = lr_jsondata ).
+    ENDTRY.
+
+    ASSIGN lr_jsondata->* TO <ls_jsondata>.
+
+    ASSIGN COMPONENT 'size' OF STRUCTURE <ls_jsondata> TO <field>  .
+    CHECK sy-subrc = 0.
+    ASSIGN <field>->* TO <table>.
+
+    READ TABLE <table> INDEX 5 ASSIGNING <field>.
+    CHECK sy-subrc = 0.
+    ASSIGN <field>->* TO <field>.
+    lv_results_total = <field>.
+
+**********************************************************************
+* json sub strings
+**********************************************************************
+
+**** age
+    Data(lv_jsondata_sub1) = substring_from( val = lv_json_data sub = '"age"').
+    lv_jsondata_sub1 = substring_to( val = lv_jsondata_sub1 sub = ',"geo"').
+    REPLACE ALL OCCURRENCES OF ',"geo"' IN lv_jsondata_sub1 WITH ''.
+    lv_jsondata_sub1  = '{' && lv_jsondata_sub1 && '}'.
+
+**** geo
+    Data(lv_jsondata_sub2) = substring_from( val = lv_json_data sub = '"geo"').
+    lv_jsondata_sub2 = substring_to( val = lv_jsondata_sub2 sub = ',"time"').
+    REPLACE ALL OCCURRENCES OF ',"time"' IN lv_jsondata_sub2 WITH ''.
+    lv_jsondata_sub2  = '{' && lv_jsondata_sub2 && '}'.
+
+**** time
+    Data(lv_jsondata_sub3) = substring_from( val = lv_json_data sub = '"time"').
+    lv_jsondata_sub3 = substring_to( val = lv_jsondata_sub3 sub = ',"id"').
+    REPLACE ALL OCCURRENCES OF ',"id"' IN lv_jsondata_sub3 WITH ''.
+    lv_jsondata_sub3  = '{' && lv_jsondata_sub3 && '}'.
+
+**** sex
+    Data(lv_jsondata_sub4) = substring_from( val = lv_json_data sub = '"sex"').
+    lv_jsondata_sub4 = substring_to( val = lv_jsondata_sub4 sub = ',"age"').
+    REPLACE ALL OCCURRENCES OF ',"age"' IN lv_jsondata_sub4 WITH ''.
+    lv_jsondata_sub4  = '{' && lv_jsondata_sub4 && '}'.
+
+**** value
+    Data(lv_jsondata_sub5) = substring_from( val = lv_json_data sub = '"value"').
+    lv_jsondata_sub5 = substring_to( val = lv_jsondata_sub5 sub = ',"dimension"').
+    REPLACE ALL OCCURRENCES OF ',"dimension"' IN lv_jsondata_sub5 WITH ''.
+    lv_jsondata_sub5  = '{' && lv_jsondata_sub5 && '}'.
+
+
+    DATA(json_substrung) = VALUE stringtab( ( lv_jsondata_sub1 )
+                                      ( lv_jsondata_sub2 )
+                                      ( lv_jsondata_sub3 )
+                                      ( lv_jsondata_sub4 ) ).
+
+
+    DATA(string_array) = VALUE stringtab( ( |age| )
+                                      ( |time| )
+                                      ( |geo| )
+                                      ( |sex| ) ).
+
+
+****
+* Do lv_results_total TIMES.
+    lv_results_temp = 1.
+    DO 4 TIMES.
+      DATA(tmpvalue) = VALUE #( string_array[ lv_results_temp ] ).
+      string_array_value = tmpvalue.
+
+      If string_array_value = 'age'.
+        string_array2_value = 'Y20'.
+        string_array3_value = lv_jsondata_sub1.
+      Elseif string_array_value = 'geo'.
+        string_array2_value = 'EU28'.
+        string_array3_value = lv_jsondata_sub2.
+      Elseif string_array_value = 'time'.
+        string_array2_value = '2020'.
+        string_array3_value = lv_jsondata_sub3.
+      Elseif string_array_value = 'sex'.
+        string_array2_value = 'F'.
+        string_array3_value = lv_jsondata_sub4.
+      ENDIF.
+
+    zreadjson=>parse_json_string(
+          EXPORTING IV_JSON_STRING = string_array3_value
+                    iv_component_json      = string_array_value
+                    iv_component_adso      = string_array_value
+                    IV_COMPONENT_SUB       = string_array2_value
+          CHANGING  cs_adso                = ls_adso ).
+    lv_results_temp = lv_results_temp + 1.
+
+    ENDDO.
+
+**** convert int to string
+      temp_string = |{ CONV string( lv_results_value ) WIDTH = 1 ALPHA = IN }|.
+
+      zreadjson=>parse_json_string(
+            EXPORTING IV_JSON_STRING = lv_jsondata_sub5
+                      iv_component_json      = 'value'
+                      iv_component_adso      = 'value'
+                      IV_COMPONENT_SUB       =  '0'
+            CHANGING  cs_adso                = ls_adso ).
+
+     APPEND ls_adso TO lt_adso.
+
+*   lv_results_value = lv_results_value + 1.
+
+* ENDDO.
+
+cl_demo_output=>display( lt_adso ).
+
+
+****   clear HTTP memory of previous calls
+      IF lv_http_client IS BOUND.
+        lv_http_client->REFRESH_RESPONSE( ).
+
+****   Close HTTP session (Exception HTTP_NO_MEMORY)
+        lv_http_client->CLOSE( ).
+      ENDIF.
+
+      CALL FUNCTION 'RSDSO_DU_DELETE_API_RFC'
+        EXPORTING
+          i_adsonm            = 'RESTAPI'
+          i_delete_all        = rs_c_true
+        EXCEPTIONS
+          deletion_failed     = 1
+          datastore_not_found = 2
+          OTHERS              = 3.
+
+      IF sy-subrc <> 0.
+****     error handling:
+        write sy-subrc.
+      ENDIF.
+
+      CALL FUNCTION 'RSDSO_DU_WRITE_API'
+        EXPORTING
+          i_adsonm            = 'RESTAPI'
+          it_data             = lt_adso
+        EXCEPTIONS
+          write_failed        = 1
+          datastore_not_found = 2
+          OTHERS              = 3.
+      IF sy-subrc <> 0.
+****     error handling:
+        write  sy-subrc.
+      ENDIF.
+
+  ENDIF.
+ENDIF.
