@@ -1,0 +1,69 @@
+class ZREADJSON definition
+  public
+  final
+  create public .
+
+  public section.
+
+   class-methods PARSE_JSON_STRING
+    importing
+      !IV_JSON_STRING  type string
+      !IV_COMPONENT_JSON type string
+      !IV_COMPONENT_ADSO type string
+      !IV_COMPONENT_SUB  type string
+    changing
+      !CS_ADSO type DATA .
+
+  protected section.
+  private section.
+ENDCLASS.
+
+
+CLASS ZREADJSON IMPLEMENTATION.
+
+ method PARSE_JSON_STRING.
+
+    FIELD-SYMBOLS: <lr_tmpdata>     TYPE ANY,
+                   <lv_value>       TYPE ANY,
+                   <ls_jsondata>    TYPE any.
+
+    Data:      lr_json          TYPE REF TO /ui2/cl_json,
+               lr_jsondata      TYPE REF TO data.
+
+     CREATE OBJECT lr_json.
+  TRY.
+      lr_json->deserialize(
+        EXPORTING json = IV_JSON_STRING
+        assoc_arrays = abap_true
+        CHANGING  data = lr_jsondata ).
+  ENDTRY.
+
+  ASSIGN lr_jsondata->* TO <ls_jsondata>.
+
+    ASSIGN COMPONENT IV_COMPONENT_JSON OF STRUCTURE <ls_jsondata> TO <lr_tmpdata>.
+    CHECK sy-subrc = 0.
+    ASSIGN <lr_tmpdata>->* TO <lr_tmpdata>.
+
+    if IV_COMPONENT_JSON  = 'value'.
+            ASSIGN COMPONENT IV_COMPONENT_SUB OF STRUCTURE <lr_tmpdata> TO <lr_tmpdata>.
+            CHECK sy-subrc = 0.
+            ASSIGN <lr_tmpdata>->* TO <lr_tmpdata>.
+    ELSE.
+        ASSIGN COMPONENT 'category' OF STRUCTURE <lr_tmpdata> TO <lr_tmpdata>.
+        CHECK sy-subrc = 0.
+        ASSIGN <lr_tmpdata>->* TO <lr_tmpdata>.
+
+        ASSIGN COMPONENT 'label' OF STRUCTURE <lr_tmpdata> TO <lr_tmpdata>.
+        CHECK sy-subrc = 0.
+        ASSIGN <lr_tmpdata>->* TO <lr_tmpdata>.
+
+        ASSIGN COMPONENT IV_COMPONENT_SUB OF STRUCTURE <lr_tmpdata> TO <lr_tmpdata>.
+        CHECK sy-subrc = 0.
+        ASSIGN <lr_tmpdata>->* TO <lr_tmpdata>.
+    ENDIF.
+    ASSIGN COMPONENT iv_component_adso OF STRUCTURE cs_adso TO <lv_value>.
+    CHECK sy-subrc = 0.
+    <lv_value> = <lr_tmpdata>.
+
+  endmethod.
+ENDCLASS.
